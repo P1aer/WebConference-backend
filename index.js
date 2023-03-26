@@ -4,6 +4,9 @@ import {Server} from "socket.io"
 import cors from "cors"
 import mongoose from "mongoose";
 import auth from "./routes/auth.js"
+import rooms from './routes/rooms.js'
+import Room from "./models/Room.js";
+
 mongoose.connect(process.env.MONGO_URI).then(() => console.log("start DB MONGA"))
 
 const PORT = process.env.PORT || 3030;
@@ -13,7 +16,7 @@ const TOKEN = process.env.TOKEN;
 const app = express();
 app.use(express.json(), cors());
 app.use('/auth', auth)
-
+app.use('/rooms', rooms)
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: {} });
@@ -21,14 +24,16 @@ const io = new Server(server, { cors: {} });
 io.use((socket, next) => {
     const token = socket.handshake.auth.token; // check the auth token provided by the client upon connection
     if (token === TOKEN) {
+        socket.userId = socket.handshake.auth.userId;
         next();
     } else {
         next(new Error("Authentication error"));
     }
 });
 
+
 let connections = {};
-io.on("connection", (socket) => {
+/*io.on("connection", (socket) => {
     console.log("User connected with id", socket.id);
 
     socket.on("ready", async (peerId, peerType) => {
@@ -84,7 +89,59 @@ io.on("connection", (socket) => {
             console.log(socket.id, "has disconnected");
         }
     });
-});
+});*/
+io.on("connection", (socket) => {
+    socket.emit("me", socket.id);
 
-// RUN APP
+    socket.on("disconnect", async () => {
+        console.log(socket.currentRoom, 'disconnect')
+        if (socket.currentRoom) {
+           await Room.findByIdAndUpdate(socket.currentRoom, {
+                $pull: {
+                    users: socket.userId
+                }
+            })
+            socket.leave(socket.currentRoom)
+        }
+        socket.currentRoom = null
+
+        socket.broadcast.emit("callEnded");
+    });
+
+    socket.on("callUser", ({ userToCall, signalData, from, name }) => {
+        io.to(userToCall).emit("callUser", { signal: signalData, from, name });
+    });
+
+    socket.on("answerCall", (data) => {
+        io.to(data.to).emit("callAccepted", data.signal);
+    });
+    socket.on('ROOM:JOIN',async (roomId) => {
+        console.log(socket.currentRoom,'room')
+        if (socket.currentRoom) {
+            await Room.findByIdAndUpdate(socket.currentRoom, {
+                $pull: {
+                    users: socket.userId
+                }
+            })
+            socket.leave(socket.currentRoom)
+        }
+       await Room.findByIdAndUpdate(roomId, {
+            $addToSet: {
+                users: socket.userId
+            }
+        })
+        socket.currentRoom = roomId
+        console.log(socket.currentRoom,'room2')
+        socket.join(roomId)
+    })
+    socket.on('ROOM:LEAVE',async ( roomId ) => {
+        await Room.findByIdAndUpdate(roomId, {
+            $pull: {
+                users: socket.userId
+            }
+        })
+        socket.leave(roomId)
+        socket.currentRoom = null
+    })
+});
 server.listen(PORT, () => console.log(`Listening on PORT ${PORT}`));
