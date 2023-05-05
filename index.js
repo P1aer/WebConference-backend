@@ -6,6 +6,8 @@ import mongoose from "mongoose";
 import auth from "./routes/auth.js"
 import rooms from './routes/rooms.js'
 import { ACTIONS } from "./config/actions.js";
+import Room from "./models/Room.js";
+
 
 mongoose.connect(process.env.MONGO_URI).then(() => console.log("start DB MONGA"))
 
@@ -96,6 +98,18 @@ io.on("connection", (socket) => {
             peerID: socket.id,
             iceCandidate,
         })
+    })
+    socket.on(ACTIONS.NEW_MESSAGE, async ({roomId, user, text}) => {
+        const obj = {
+            user,
+            text
+        }
+        await Room.findByIdAndUpdate(roomId, {
+            $push: {
+                messages: obj
+            }
+        })
+        socket.to(roomId).emit(ACTIONS.SET_MESSAGE, obj)
     })
 });
 server.listen(PORT, () => console.log(`Listening on PORT ${PORT}`));

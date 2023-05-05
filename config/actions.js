@@ -7,4 +7,6 @@ export const ACTIONS = {
     RELAY_ICE: 'relay-ice',
     ICE_CANDIDATE: 'ice-candidate',
     SESSION_DESCRIPTION: 'session-description',
+    NEW_MESSAGE: 'ROOM:NEW_MESSAGE',
+    SET_MESSAGE: 'ROOM:SET_MESSAGES',
 }
