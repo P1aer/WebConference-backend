@@ -27,6 +27,7 @@ io.use((socket, next) => {
     const token = socket.handshake.auth.token; // check the auth token provided by the client upon connection
     if (token === TOKEN) {
         socket.userId = socket.handshake.auth.userId;
+        socket.userName = socket.handshake.auth.userName
         next();
     } else {
         next(new Error("Authentication error"));
@@ -35,26 +36,42 @@ io.use((socket, next) => {
 
 
 io.on("connection", (socket) => {
-    const leaveRoom = () => {
+    const leaveRoom = async () => {
 
         const {rooms} = socket;
-        // TODO тут мб что поменять
-        Array.from(rooms).filter(roomId => roomId!== socket.id).forEach(roomId => {
+        const user = {
+            peerId: socket.id,
+            userId: socket.userId,
+            userName: socket.userName,
+        }
+        for (const roomId1 of Array.from(rooms).filter(roomId => roomId !== socket.id)) {
 
             const clients = Array.from(io.sockets.adapter.rooms.get(socket.currentRoom) || [])
+            try {
+                await Room.findByIdAndUpdate(roomId1, {
+                    $pull :{
+                        users: user
+                    }
+                })
+            }
+            catch (error) {
+                console.log(error)
+                return
+            }
             clients.forEach(clientID => {
                 // оповещаем о выходе пользователя
                 io.to(clientID).emit(ACTIONS.REMOVE_PEER, {
                     peerID: socket.id,
                 })
+                io.to(clientID).emit(ACTIONS.LEAVED, user)
                 // на фронте себе
                 socket.emit(ACTIONS.REMOVE_PEER, {
                     peerID: clientID
                 })
             })
 
-            socket.leave(roomId)
-        })
+            socket.leave(roomId1)
+        }
 
 
         socket.currentRoom = null
@@ -65,6 +82,22 @@ io.on("connection", (socket) => {
         if (Array.from(joinedRooms).includes(roomId)) {
             return console.warn(`Already joined to ${roomId}`);
         }
+        const user = {
+            peerId: socket.id,
+            userId: socket.userId,
+            userName: socket.userName,
+        }
+        try {
+            await Room.findByIdAndUpdate(roomId, {
+                $push: {
+                    users: user
+                }
+            })
+        }
+        catch (error) {
+            console.log(error)
+            return
+        }
         console.log(roomId, 'Id on join')
         const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || [])
         console.log(clients, 'client in room')
@@ -74,6 +107,7 @@ io.on("connection", (socket) => {
                 peerID: socket.id,
                 createOffer: false,
             })
+            io.to(clientID).emit(ACTIONS.JOINED, user)
             // кто подключился создает офер
             socket.emit(ACTIONS.ADD_PEER, {
                 peerID: clientID,
@@ -82,6 +116,7 @@ io.on("connection", (socket) => {
         })
         socket.currentRoom = roomId
         socket.join(roomId)
+
         console.log(io.sockets.adapter.rooms.get(roomId),'clients after join\n ////////////////////////////////////////')
     })
     socket.on("disconnecting", leaveRoom)

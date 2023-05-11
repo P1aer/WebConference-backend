@@ -4,12 +4,13 @@ const RoomSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
+        unique: true,
     },
     messages: [{
         type: Object,
     }],
     users: [{
-        type: String,
+        type: Object,
     }]
 }, {
     timestamps: true
