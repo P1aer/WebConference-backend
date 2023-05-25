@@ -47,7 +47,7 @@ io.on("connection", (socket) => {
         for (const roomId1 of Array.from(rooms).filter(roomId => roomId !== socket.id)) {
 
             const clients = Array.from(io.sockets.adapter.rooms.get(socket.currentRoom) || [])
-            try {
+/*            try {
                 await Room.findByIdAndUpdate(roomId1, {
                     $pull :{
                         users: user
@@ -57,7 +57,7 @@ io.on("connection", (socket) => {
             catch (error) {
                 console.log(error)
                 return
-            }
+            }*/
             clients.forEach(clientID => {
                 // оповещаем о выходе пользователя
                 io.to(clientID).emit(ACTIONS.REMOVE_PEER, {
@@ -87,7 +87,7 @@ io.on("connection", (socket) => {
             userId: socket.userId,
             userName: socket.userName,
         }
-        try {
+/*        try {
             await Room.findByIdAndUpdate(roomId, {
                 $push: {
                     users: user
@@ -97,7 +97,7 @@ io.on("connection", (socket) => {
         catch (error) {
             console.log(error)
             return
-        }
+        }*/
         console.log(roomId, 'Id on join')
         const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || [])
         console.log(clients, 'client in room')
